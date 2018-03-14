@@ -29,7 +29,9 @@ import edu.uci.ics.texera.api.tuple.Tuple;
 import edu.uci.ics.texera.api.utils.Utils;
 import edu.uci.ics.texera.dataflow.common.PredicateBase;
 import edu.uci.ics.texera.dataflow.common.PropertyNameConstants;
+import edu.uci.ics.texera.dataflow.plangen.AutoRunQueryPlan;
 import edu.uci.ics.texera.dataflow.plangen.LogicalPlan;
+import edu.uci.ics.texera.dataflow.plangen.ManualRunQueryPlan;
 import edu.uci.ics.texera.dataflow.sink.tuple.TupleSink;
 import edu.uci.ics.texera.web.TexeraWebException;
 
@@ -57,55 +59,9 @@ public class QueryPlanResource {
     @Path("/execute")
     // TODO: investigate how to use LogicalPlan directly
     public JsonNode executeQueryPlan(String logicalPlanJson) {
+        ManualRunQueryPlan manualRunQueryPlan = new ManualRunQueryPlan(logicalPlanJson);
         try {
-            LogicalPlan logicalPlan = new ObjectMapper().readValue(logicalPlanJson, LogicalPlan.class);
-            Plan plan = logicalPlan.buildQueryPlan();
-            ISink sink = plan.getRoot();
-            
-            // send response back to frontend
-            if (sink instanceof TupleSink) {
-                TupleSink tupleSink = (TupleSink) sink;
-                tupleSink.open();
-                List<Tuple> results = tupleSink.collectAllTuples();
-                tupleSink.close();
-                
-                // make sure result directory is created
-                if (Files.notExists(resultDirectory)) {
-                    Files.createDirectories(resultDirectory);
-                }
-                
-                // clean up old result files
-                cleanupOldResults();
-                
-                // generate new UUID as the result id
-                String resultID = UUID.randomUUID().toString();
-                
-                // write original json of the result into a file                
-                java.nio.file.Path resultFile = resultDirectory.resolve(resultID + ".json");
-
-                Files.createFile(resultFile);
-                Files.write(resultFile, new ObjectMapper().writeValueAsBytes(results));
-                
-                // put readable json of the result into response
-                ArrayNode resultNode = new ObjectMapper().createArrayNode();
-                for (Tuple tuple : results) {
-                    resultNode.add(tuple.getReadableJson());
-                }
-                
-                ObjectNode response = new ObjectMapper().createObjectNode();
-                response.put("code", 0);
-                response.set("result",resultNode);
-                response.put("resultID", resultID);
-                return response;
-            } else {
-                // execute the plan and return success message
-                Engine.getEngine().evaluate(plan);
-                ObjectNode response = new ObjectMapper().createObjectNode();
-                response.put("code", 1);
-                response.put("message", "plan sucessfully executed");
-                return response;
-            }
-            
+            return manualRunQueryPlan.run();
         } catch (IOException | TexeraException e) {
             throw new TexeraWebException(e.getMessage());
         }   
@@ -233,56 +189,9 @@ public class QueryPlanResource {
     @POST
     @Path("/autocomplete")
     public JsonNode executeAutoQueryPlan(String logicalPlanJson) {
+        AutoRunQueryPlan autoRunQueryPlan = new AutoRunQueryPlan(logicalPlanJson);
         try {
-            JsonNode logicalPlanNode = new ObjectMapper().readTree(logicalPlanJson);
-            ArrayNode operators = (ArrayNode) logicalPlanNode.get(PropertyNameConstants.OPERATOR_LIST);
-            ArrayNode links = (ArrayNode) logicalPlanNode.get(PropertyNameConstants.OPERATOR_LINK_LIST);
-
-            ArrayNode validOperators = new ObjectMapper().createArrayNode();
-            ArrayNode validLinks = new ObjectMapper().createArrayNode();
-            ArrayNode linksEndWithInvalidDest = new ObjectMapper().createArrayNode();
-
-            Set<String> validOperatorsId = new HashSet<>();
-            getValidOperatorsAndLinks(operators, links, validOperators, validLinks,
-                                      linksEndWithInvalidDest, validOperatorsId);
-
-            ((ObjectNode) logicalPlanNode).putArray(PropertyNameConstants.OPERATOR_LIST).addAll(validOperators);
-            ((ObjectNode) logicalPlanNode).putArray(PropertyNameConstants.OPERATOR_LINK_LIST).addAll(validLinks);
-
-            LogicalPlan logicalPlan = new ObjectMapper().treeToValue(logicalPlanNode, LogicalPlan.class);
-            String resultID = UUID.randomUUID().toString();
-
-            // Get all input schema for valid operator with valid links
-            Map<String, List<Schema>> inputSchema = logicalPlan.retrieveAllOperatorInputSchema();
-            // Get all input schema for invalid operator with valid input operator
-            for (JsonNode linkNode: linksEndWithInvalidDest) {
-                String origin = linkNode.get(PropertyNameConstants.ORIGIN_OPERATOR_ID).textValue();
-                String dest = linkNode.get(PropertyNameConstants.DESTINATION_OPERATOR_ID).textValue();
-
-                Schema schema = logicalPlan.getOperatorOutputSchema(origin, inputSchema);
-                inputSchema.computeIfAbsent(dest, k -> new ArrayList<>()).add(schema);
-            }
-
-            ObjectNode result = new ObjectMapper().createObjectNode();
-            for (Map.Entry<String, List<Schema>> entry: inputSchema.entrySet()) {
-                Set<String> attributes = new HashSet<>();
-                for (Schema schema: entry.getValue()) {
-                    attributes.addAll(schema.getAttributeNames());
-                }
-
-                ArrayNode currentSchemaNode = result.putArray(entry.getKey());
-                for (String attrName: attributes) {
-                    currentSchemaNode.add(attrName);
-                }
-
-            }
-
-            ObjectNode response = new ObjectMapper().createObjectNode();
-            response.put("code", 0);
-            response.set("result", result);
-            response.put("resultID", resultID);
-            return response;
-
+            return autoRunQueryPlan.run();
         } catch (JsonMappingException je) {
             ObjectNode response = new ObjectMapper().createObjectNode();
             response.put("code", -1);
@@ -301,66 +210,9 @@ public class QueryPlanResource {
     }
     
     
-    /**
-     * Cleans up the old result json files stored in the file system.
-     * The current cleanup policy is to keep the latest 5 files.
-     * 
-     * TODO: In the case where there are multiple users, they need their own spaces for storing files.
-     * 
-     * @throws IOException
-     */
-    public static void cleanupOldResults() throws IOException {
-    		// list all the files in the reuslt directory
-    		List<java.nio.file.Path> resultFiles = Files.list(resultDirectory).collect(Collectors.toList());
-    		
-    		// clean up if there are more than 5 files
-    		if (resultFiles.size() <= 5) {
-    			return;
-    		}
-    		
-    		// sort the files by their creation time
-    		Collections.sort(resultFiles, (java.nio.file.Path f1, java.nio.file.Path f2) -> {
-				try {
-					return (
-							Files.readAttributes(f1, BasicFileAttributes.class).creationTime().compareTo(
-									Files.readAttributes(f2, BasicFileAttributes.class).creationTime()));
-				} catch (IOException e) {
-					return 0;
-				}
-			});
-    		
-    		// remove the oldest file
-    		java.nio.file.Path oldestFile = resultFiles.get(0);
-    		Files.delete(oldestFile);
-    }    
 
 
-    private void getValidOperatorsAndLinks(ArrayNode operators, ArrayNode links,
-                                           ArrayNode validOperators, ArrayNode validLinks,
-                                           ArrayNode linksEndWithInvalidDest, Set<String> validOperatorsId) {
-        // Try to convert to valid operator
-        for (JsonNode operatorNode: operators) {
-            try {
-                new ObjectMapper().treeToValue(operatorNode, PredicateBase.class);
-                validOperators.add(operatorNode);
-                validOperatorsId.add(operatorNode.get(PropertyNameConstants.OPERATOR_ID).textValue());
-                // Fail
-            } catch (JsonProcessingException e) {
-                System.out.println(e);
-            }
-        }
 
-        // Only include edges that connect valid operators
-        for (JsonNode linkNode: links) {
-            String origin = linkNode.get(PropertyNameConstants.ORIGIN_OPERATOR_ID).textValue();
-            String dest = linkNode.get(PropertyNameConstants.DESTINATION_OPERATOR_ID).textValue();
 
-            if (validOperatorsId.contains(origin) && validOperatorsId.contains(dest)) {
-                validLinks.add(linkNode);
-            } else if (validOperatorsId.contains(origin) && !validOperatorsId.contains(dest)) {
-                linksEndWithInvalidDest.add(linkNode);
-            }
-        }
-    }
 
 }
