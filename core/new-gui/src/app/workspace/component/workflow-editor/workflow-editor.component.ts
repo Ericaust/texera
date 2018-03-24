@@ -91,8 +91,20 @@ export class WorkflowEditorComponent implements AfterViewInit {
       gridSize: 1,
       snapLinks: true,
       linkPinning: false,
-      validateConnection: this.validateOperatorConnection
+      validateConnection: this.validateOperatorConnection,
+      interactive: {vertexAdd: false},
+      defaultLink: new joint.shapes.devs.Link({
+        attrs : {
+          '.marker-target': {
+              d: 'M 10 0 L 0 5 L 10 10 z',
+          },
+          '.marker-arrowhead' : {
+            d: 'M 10 0 L 0 5 L 10 10 z'
+          }
+        }
+      })
     });
+
 
     return paper;
   }
