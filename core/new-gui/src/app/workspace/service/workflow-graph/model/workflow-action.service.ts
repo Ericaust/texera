@@ -21,7 +21,7 @@ export class WorkflowActionService {
 
   private addLinkActionSubject: Subject<{ link: OperatorLink }> = new Subject();
 
-  private deleteLinkActionSubject: Subject<{ linkID: string }> = new Subject();
+  private deleteLinkActionSubject: Subject<{ link: OperatorLink }> = new Subject();
 
   constructor(
   ) { }
@@ -77,21 +77,21 @@ export class WorkflowActionService {
     return this.addLinkActionSubject.asObservable();
   }
 
-  /**
+    /**
    * Deletes a link from the workflow graph
-   * @param linkID
+   * @param link
    */
-  public deleteLinkWithID(linkID: string): void {
-    if (!this.texeraGraph.hasLinkWithID(linkID)) {
-      throw new Error(`link with ID ${linkID} doesn't exist`);
+  public deleteLink(link: OperatorLink): void {
+    if (!this.texeraGraph.hasLink(link.source, link.target)) {
+      throw new Error(`link with ID ${link.linkID} doesn't exist`);
     }
-    this.deleteLinkActionSubject.next({ linkID });
+    this.deleteLinkActionSubject.next({ link });
   }
 
   /**
    * Gets the event stream of the actions to delete a link
    */
-  _onDeleteLinkAction(): Observable<{ linkID: string }> {
+  _onDeleteLinkAction(): Observable<{ link: OperatorLink }> {
     return this.deleteLinkActionSubject.asObservable();
   }
 

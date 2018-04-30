@@ -69,10 +69,17 @@ describe('TexeraModelService', () => {
   function getJointLinkValue(link: OperatorLink) {
     // getSourceElement, getTargetElement, and get all returns a function
     //  that returns the corresponding value
+
     return {
       id: link.linkID,
-      getSourceElement: () => ({ id: link.source.operatorID }),
-      getTargetElement: () => ({ id: link.target.operatorID }),
+      attributes: {
+        source: {
+          id: link.source.operatorID,
+        },
+        target: {
+          id: link.target.operatorID
+        }
+      },
       get: (port: string) => {
         if (port === 'source') {
           return { port: link.source.portID };
@@ -99,8 +106,16 @@ describe('TexeraModelService', () => {
     //  that returns the corresponding value
     return {
       id: link.linkID,
-      getSourceElement: () => ({ id: link.source.operatorID }),
-      getTargetElement: () => null,
+      attributes: {
+        source: {
+          id: link.source.operatorID,
+        },
+        target: {
+          id: undefined
+        }
+      },
+      // getSourceElement: () => ({ id: link.source.operatorID }),
+      // getTargetElement: () => null,
       get: (port: string) => {
         if (port === 'source') {
           return { port: link.source.portID };
@@ -367,11 +382,15 @@ describe('TexeraModelService', () => {
       complete: () => {
         expect(texeraModelService.getTexeraGraph().getOperators().length).toEqual(2);
         expect(texeraModelService.getTexeraGraph().getLinks().length).toEqual(1);
-        expect(texeraModelService.getTexeraGraph().hasLinkWithID(getMockScanResultLink().linkID)).toBeTruthy();
-        expect(texeraModelService.getTexeraGraph().getLinkWithID(getMockScanResultLink().linkID)).toEqual(getMockScanResultLink());
+        expect(texeraModelService.getTexeraGraph()
+          .hasLink(getMockScanResultLink().source, getMockScanResultLink().target)).toBeTruthy();
+
+        expect(texeraModelService.getTexeraGraph()
+          .getLink(getMockScanResultLink().source, getMockScanResultLink().target)).toEqual(getMockScanResultLink());
         expect(texeraModelService.getTexeraGraph().hasLink(
           getMockScanResultLink().source, getMockScanResultLink().target
         )).toBeTruthy();
+
       }
     });
 
@@ -587,6 +606,7 @@ describe('TexeraModelService', () => {
    * Texera Link Delete Stream should emit one event when it's detached
    */
   it('should delete the link when a link is detached from the target port', marbles((m) => {
+
     // prepare the dependency services
     const workflowActionService: WorkflowActionService = TestBed.get(WorkflowActionService);
     const jointModelService: JointModelService = TestBed.get(JointModelService);
@@ -615,6 +635,7 @@ describe('TexeraModelService', () => {
     const changeLinkMarbleValues = {
       q: getIncompleteJointLink(getMockScanResultLink())
     };
+
     spyOn(jointModelService, 'onJointLinkCellChange').and.returnValue(
       m.hot(changeLinkMarbleString, changeLinkMarbleValues)
     );
@@ -698,8 +719,8 @@ describe('TexeraModelService', () => {
     jointModelService.onJointLinkCellChange().subscribe({
       complete: () => {
         expect(texeraModelService.getTexeraGraph().getLinks().length).toEqual(1);
-        expect(texeraModelService.getTexeraGraph().hasLinkWithID(mockChangedLink.linkID)).toBeTruthy();
-        expect(texeraModelService.getTexeraGraph().getLinkWithID(mockChangedLink.linkID)).toEqual(mockChangedLink);
+        expect(texeraModelService.getTexeraGraph().hasLink(mockChangedLink.source, mockChangedLink.target)).toBeTruthy();
+        expect(texeraModelService.getTexeraGraph().getLink(mockChangedLink.source, mockChangedLink.target)).toEqual(mockChangedLink);
         expect(texeraModelService.getTexeraGraph().hasLink(
           getMockScanResultLink().source, getMockScanResultLink().target
         )).toBeFalsy();

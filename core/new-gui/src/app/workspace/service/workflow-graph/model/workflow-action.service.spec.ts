@@ -129,7 +129,7 @@ describe('WorkflowActionService', () => {
     const eventStream = '-e-';
 
     m.hot(eventStream).subscribe(
-      event => service.deleteLinkWithID(getMockScanResultLink().linkID)
+      event => service.deleteLink(getMockScanResultLink())
     );
 
     const outputStream = service._onDeleteLinkAction().map(value => 'e');
@@ -143,7 +143,7 @@ describe('WorkflowActionService', () => {
     texeraGraph.addOperator(getMockScanPredicate());
     texeraGraph.addOperator(getMockResultPredicate());
     expect(() => {
-      service.deleteLinkWithID(getMockScanResultLink().linkID);
+      service.deleteLink(getMockScanResultLink());
     }).toThrowError(new RegExp(`doesn't exist`));
   });
 

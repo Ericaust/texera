@@ -10,6 +10,7 @@ import '../../../../common/rxjs-operators';
 
 import * as joint from 'jointjs';
 import { JointUIService } from '../../joint-ui/joint-ui.service';
+import { isEqual } from 'lodash-es';
 
 /**
  *
@@ -46,7 +47,7 @@ export class JointModelService {
     );
 
     this.workflowActionService._onDeleteLinkAction().subscribe(
-      value => this.deleteJointLinkCell(value.linkID)
+      value => this.deleteJointLinkCell(value.link)
     );
   }
 
@@ -86,6 +87,19 @@ export class JointModelService {
     return jointLinkChangeStream;
   }
 
+  public getJointLinkCell(link: OperatorLink): joint.dia.Cell {
+    const jointJSLink = this.jointGraph.getLinks()
+    .map(jointLink => this.getOperatorLink(jointLink))
+    .find(operatorLink => isEqual(operatorLink.source, link.source) && isEqual(operatorLink.target, link.target));
+
+    if (jointJSLink === undefined) {
+      throw Error('Error: no link is found in the jointJS paper for deleteJointLinkCell method');
+    }
+
+    const linkID = jointJSLink.linkID;
+    return this.jointGraph.getCell(linkID);
+  }
+
   private addJointOperatorElement(operator: OperatorPredicate, point: Point): void {
     const operatorJointElement = this.jointUIService.getJointjsOperatorElement(
       operator, point);
@@ -102,8 +116,39 @@ export class JointModelService {
     this.jointGraph.addCell(jointLinkCell);
   }
 
-  private deleteJointLinkCell(linkID: string): void {
-    this.jointGraph.getCell(linkID).remove();
+
+  private deleteJointLinkCell(link: OperatorLink): void {
+    const currentJointCell = this.getJointLinkCell(link);
+    currentJointCell.remove();
+  }
+
+    /**
+   * Transforms a JointJS link (joint.dia.Link) to a Texera Link Object
+   * The JointJS link must be valid, otherwise an error will be thrown.
+   * @param jointLink
+   */
+  private getOperatorLink(jointLink: joint.dia.Link): OperatorLink {
+
+    // the link should be a valid link (both source and target are connected to an operator)
+    // isValidLink function is not reused because of Typescript strict null checking
+
+    const SourceID = jointLink.attributes.source.id;
+    const TargetID = jointLink.attributes.target.id;
+    if (SourceID === undefined || TargetID === undefined) {
+      throw new Error('Invalid JointJS Link:');
+    }
+
+    return {
+      linkID: jointLink.id.toString(),
+      source: {
+        operatorID: SourceID.toString(),
+        portID: jointLink.get('source').port.toString()
+      },
+      target: {
+        operatorID: TargetID.toString(),
+        portID: jointLink.get('target').port.toString()
+      }
+    };
   }
 
 }

@@ -113,14 +113,8 @@ describe('JointModelService', () => {
 
       workflowActionService._onAddLinkAction().subscribe({
         complete : () => {
-          console.log(getJointGraph(jointModelService).getCell(getMockScanResultLink().linkID));
-          console.log(getJointGraph(jointModelService).getCells());
           expect(getJointGraph(jointModelService).getLinks().length).toEqual(1);
-          // expect(getJointGraph(jointModelService).getCell(getMockScanResultLink().linkID)).toBeTruthy();
-          expect(getJointGraph(jointModelService).getLinks().find(
-            link => isEqual(link.attributes.source.id, getMockScanResultLink().source.operatorID) &&
-            isEqual(link.attributes.target.id , getMockScanResultLink().target.operatorID)
-          )).toBeTruthy();
+          expect(jointModelService.getJointLinkCell(getMockScanResultLink())).toBeTruthy();
         }
       });
     }));
@@ -141,8 +135,26 @@ describe('JointModelService', () => {
       );
 
       spyOn(workflowActionService, '_onDeleteLinkAction').and.returnValue(
-        m.hot('')
+        m.hot('------d-|', {
+          d : { link: getMockScanResultLink() }
+        })
       );
+
+      const jointModelService = TestBed.get(JointModelService);
+      workflowActionService._onDeleteLinkAction().subscribe({
+        complete : () => {
+          expect(getJointGraph(jointModelService).getLinks().length).toEqual(0);
+          expect(getJointGraph(jointModelService).getCells().length).toEqual(2);
+          expect(
+            () => jointModelService.getJointLinkCell(getMockScanResultLink())
+          ).toThrowError(new RegExp('no link is found'));
+        }
+      });
+
+
+      const jointLinkDeleteStream = jointModelService.onJointLinkCellDelete().map((value: any) => 'e');
+      const expectedStream = m.hot('------e-');
+      m.expect(jointLinkDeleteStream).toBeObservable(expectedStream);
 
     }));
 
@@ -182,6 +194,40 @@ describe('JointModelService', () => {
       const expectedStream = m.hot('-e-');
 
       m.expect(jointOperatorDeleteStream).toBeObservable(expectedStream);
+
+    }));
+
+    it('should emit link add event correctly when link is added by JointJS', marbles((m) => {
+      workflowActionService.addOperator(getMockScanPredicate(), getMockPoint());
+      workflowActionService.addOperator(getMockResultPredicate(), getMockPoint());
+
+      const jointUIService = TestBed.get(JointUIService);
+      const jointLinkCell = jointUIService.getJointjsLinkElement(getMockScanResultLink().source, getMockScanResultLink().target);
+
+
+      m.hot('-e-').do(v => getJointGraph(jointModelService).addCell(jointLinkCell)).subscribe();
+
+      const jointLinkAddStream = jointModelService.onJointLinkCellAdd().map(value => 'e');
+      const expectedStream = m.hot('-e-');
+      m.expect(jointLinkAddStream).toBeObservable(expectedStream);
+
+
+    }));
+
+    it('should emit link delete event correctly when link is deleted by JointJS', marbles((m) => {
+
+      workflowActionService.addOperator(getMockScanPredicate(), getMockPoint());
+      workflowActionService.addOperator(getMockResultPredicate(), getMockPoint());
+
+      const jointUIService = TestBed.get(JointUIService);
+      const jointLinkCell = jointUIService.getJointjsLinkElement(getMockScanResultLink().source, getMockScanResultLink().target);
+      getJointGraph(jointModelService).addCell(jointLinkCell);
+
+      m.hot('---e-').do(v => jointModelService.getJointLinkCell(getMockScanResultLink()).remove()).subscribe();
+
+      const jointLinkDeleteStream = jointModelService.onJointLinkCellDelete().map(value => 'e');
+      const expectedStream = m.hot('---e-');
+      m.expect(jointLinkDeleteStream).toBeObservable(expectedStream);
 
     }));
 

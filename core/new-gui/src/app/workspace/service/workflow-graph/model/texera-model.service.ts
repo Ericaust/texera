@@ -9,6 +9,7 @@ import { JointModelService } from './joint-model.service';
 import { WorkflowGraphReadonly } from './../../../types/workflow-graph-readonly';
 import { OperatorSchema } from './../../../types/operator-schema';
 import { WorkflowGraph, OperatorLink, OperatorPredicate } from './../../../types/workflow-graph';
+import { OperatorPort } from '../../../types/operator-port';
 
 /**
  *
@@ -33,6 +34,7 @@ export class TexeraModelService {
     // this is very dangerous and should be prohibited in most cases
     this.texeraGraph = (workflowActionService as any).texeraGraph;
 
+
     this.workflowActionService._onAddOperatorAction()
       .subscribe(value => this.addOperator(value.operator));
 
@@ -47,20 +49,29 @@ export class TexeraModelService {
 
     this.jointModelService.onJointLinkCellDelete()
       .filter(link => TexeraModelService.isValidLink(link))
-      .map(link => link.id.toString())
-      .subscribe(linkID => this.deleteLink(linkID));
+      .map(link => TexeraModelService.getOperatorLink(link))
+      .subscribe(link => this.deleteLink(link.source, link.target));
 
     const jointLinkChange = this.jointModelService.onJointLinkCellChange()
       // we intentially want the side effect (delete the link) to happen **before** other operations in the chain
-      .do((link) => {
-        const linkID = link.id.toString();
-        if (this.texeraGraph.hasLinkWithID(linkID)) { this.deleteLink(linkID); }
+
+      .do(link => {
+        if (this.texeraGraph.hasLinkWithID(link.id.toString())) {
+          this.deleteLinkWithID(link.id.toString());
+        }
       })
+      // .do((link) => {
+      //   const texeraOperatorLink = TexeraModelService.getOperatorLink(link);
+      //   if (this.texeraGraph.hasLink(texeraOperatorLink.source, texeraOperatorLink.target)) {
+      //     this.deleteLink(texeraOperatorLink.source, texeraOperatorLink.target);
+      //   }
+      // })
       .filter(link => TexeraModelService.isValidLink(link))
       .map(link => TexeraModelService.getOperatorLink(link))
       .subscribe(link => {
         this.addLink(link);
-      });
+      })
+      ;
 
   }
 
@@ -99,7 +110,12 @@ export class TexeraModelService {
     this.addLinkSubject.next(link);
   }
 
-  private deleteLink(linkID: string): void {
+  private deleteLink(source: OperatorPort, target: OperatorPort): void {
+    const deletedLink = this.texeraGraph.deleteLink(source, target);
+    this.deleteLinkSubject.next(deletedLink);
+  }
+
+  private deleteLinkWithID(linkID: string): void {
     const deletedLink = this.texeraGraph.deleteLinkWithID(linkID);
     this.deleteLinkSubject.next(deletedLink);
   }
@@ -113,21 +129,22 @@ export class TexeraModelService {
 
     // the link should be a valid link (both source and target are connected to an operator)
     // isValidLink function is not reused because of Typescript strict null checking
-    const jointSourceElement = jointLink.getSourceElement();
-    const jointTargetElement = jointLink.getTargetElement();
 
-    if (jointSourceElement === null || jointTargetElement === null) {
-      throw new Error('Invalid JointJS Link:');
+    const SourceID = jointLink.attributes.source.id;
+    const TargetID = jointLink.attributes.target.id;
+
+    if (SourceID === undefined || TargetID === undefined) {
+      throw new Error('Texera-model.service: getOperatorLink has invalid JointJS Link:');
     }
 
     return {
       linkID: jointLink.id.toString(),
       source: {
-        operatorID: jointSourceElement.id.toString(),
+        operatorID: SourceID.toString(),
         portID: jointLink.get('source').port.toString()
       },
       target: {
-        operatorID: jointTargetElement.id.toString(),
+        operatorID: TargetID.toString(),
         portID: jointLink.get('target').port.toString()
       }
     };
@@ -139,7 +156,7 @@ export class TexeraModelService {
    * @param jointLink
    */
   static isValidLink(jointLink: joint.dia.Link): boolean {
-    return jointLink.getSourceElement() !== null && jointLink.getTargetElement() !== null;
+    return jointLink.attributes.source.id !== undefined && jointLink.attributes.target.id !== undefined;
   }
 
 

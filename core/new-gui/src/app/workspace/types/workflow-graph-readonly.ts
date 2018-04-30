@@ -17,8 +17,6 @@ export interface WorkflowGraphReadonly {
 
   hasLink(source: OperatorPort, target: OperatorPort): boolean;
 
-  getLinkWithID(linkID: string): OperatorLink;
-
   getLink(source: OperatorPort, target: OperatorPort): OperatorLink;
 
   getLinks(): OperatorLink[];

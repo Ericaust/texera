@@ -99,7 +99,8 @@ export class WorkflowEditorComponent implements AfterViewInit {
 
   private handleWindowResize(): void {
     // when the window is resized (limit to at most one event every 1000ms)
-    Observable.fromEvent(window, 'resize').auditTime(1000).subscribe(
+    Observable.fromEvent(window, 'resize')
+    .auditTime(1000).subscribe(
       () => {
         // reset the origin cooredinates
         this.setJointPaperOriginOffset();

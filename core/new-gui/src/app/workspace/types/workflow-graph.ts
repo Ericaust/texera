@@ -99,13 +99,6 @@ export class WorkflowGraph implements WorkflowGraphReadonly {
     return true;
   }
 
-  public getLinkWithID(linkID: string): OperatorLink {
-    const link = this.operatorLinkMap.get(linkID);
-    if (link === undefined) {
-      throw new Error(`link with ID ${linkID} doesn't exist`);
-    }
-    return link;
-  }
 
   public getLink(source: OperatorPort, target: OperatorPort): OperatorLink {
     const links = this.getLinks().filter(
@@ -173,6 +166,7 @@ export class WorkflowGraph implements WorkflowGraphReadonly {
         throw new Error(`link's source port ${link.source.portID} doesn't exist
           on output ports of the source operator ${link.source.operatorID}`);
     }
+
     if (graph.getOperator(link.target.operatorID).inputPorts.find(
       (port) => port === link.target.portID) === undefined) {
         throw new Error(`link's target port ${link.target.portID} doesn't exist

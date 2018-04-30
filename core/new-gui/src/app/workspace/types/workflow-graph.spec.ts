@@ -63,7 +63,6 @@ describe('WorkflowGraph', () => {
     workflowGraph.addOperator(getMockResultPredicate());
     workflowGraph.addLink(getMockScanResultLink());
 
-    expect(workflowGraph.getLinkWithID(getMockScanResultLink().linkID)).toEqual(getMockScanResultLink());
     expect(workflowGraph.getLink(
       getMockScanResultLink().source, getMockScanResultLink().target
     )).toEqual(getMockScanResultLink());
@@ -104,8 +103,9 @@ describe('WorkflowGraph', () => {
   });
 
   it('should throw an error when tring to get a nonexist link by link ID', () => {
+    const mockLink = getMockScanResultLink();
     expect(() => {
-      workflowGraph.getLinkWithID('nonexist');
+      workflowGraph.getLink(mockLink.source, mockLink.target);
     }).toThrowError(new RegExp(`doesn't exist`));
   });
 
@@ -122,7 +122,7 @@ describe('WorkflowGraph', () => {
     workflowGraph.addOperator(getMockScanPredicate());
     workflowGraph.addOperator(getMockResultPredicate());
     workflowGraph.addLink(getMockScanResultLink());
-    workflowGraph.deleteLinkWithID(getMockScanResultLink().linkID);
+    workflowGraph.deleteLink(getMockScanResultLink().source, getMockScanResultLink().target);
 
     expect(workflowGraph.getLinks().length).toEqual(0);
   });
